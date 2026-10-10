@@ -1,11 +1,8 @@
 """Test fixtures backed by a real Postgres database."""
 
 import asyncio
-import hashlib
-import hmac
 import json
 import os
-import time
 import uuid
 from dataclasses import dataclass
 from decimal import Decimal
@@ -18,10 +15,11 @@ from alembic.config import Config
 from sqlalchemy import make_url, text, update
 from sqlalchemy.ext.asyncio import create_async_engine
 
+from tests.helpers import PROVIDER_API_KEY, WEBHOOK_SECRET
 from wallet.cli import create_account
 from wallet.config import Settings
 from wallet.db import Database
-from wallet.main import create_app
+from wallet.main import build_provider_client, create_app
 from wallet.models import Account, Base
 
 SERVICE_ROOT = Path(__file__).resolve().parents[1]
@@ -29,8 +27,6 @@ TEST_DATABASE_URL = os.environ.get(
     "TEST_DATABASE_URL",
     "postgresql+asyncpg://ledgerlite:ledgerlite@localhost:55432/ledgerlite_test",
 )
-PROVIDER_API_KEY = "test-provider-key"
-WEBHOOK_SECRET = "test-webhook-secret"
 
 
 async def _ensure_database(url: str) -> None:
@@ -81,10 +77,69 @@ def settings(database_url) -> Settings:
     )
 
 
+class FakeProvider:
+    """Stands in for provider-mock behind httpx.MockTransport."""
+
+    def __init__(self) -> None:
+        self.invoices: dict[str, dict] = {}
+        self.requests: list[httpx.Request] = []
+        self.failure: str | None = None
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        self.requests.append(request)
+        if self.failure == "timeout":
+            raise httpx.ReadTimeout("read timed out", request=request)
+        if self.failure == "connect":
+            raise httpx.ConnectError("connection refused", request=request)
+        if self.failure == "http500":
+            return httpx.Response(500, json={"error": "boom"})
+        if self.failure == "http400":
+            return httpx.Response(400, json={"error": "bad request"})
+        if request.headers.get("Authorization") != f"Bearer {PROVIDER_API_KEY}":
+            return httpx.Response(401)
+
+        path = request.url.path
+        if request.method == "POST" and path == "/invoices":
+            data = json.loads(request.content)
+            invoice_id = f"inv_{uuid.uuid4().hex}"
+            self.invoices[invoice_id] = {
+                "invoice_id": invoice_id,
+                "external_id": data["external_id"],
+                "amount": data["amount"],
+                "currency": data["currency"],
+                "callback_url": data["callback_url"],
+                "status": "pending",
+                "paid_amount": "0.00",
+                "pay_url": f"http://provider.test/pay/{invoice_id}",
+            }
+            return httpx.Response(201, json=self.invoices[invoice_id])
+        if request.method == "GET" and path.startswith("/invoices/"):
+            invoice = self.invoices.get(path.removeprefix("/invoices/"))
+            return httpx.Response(200, json=invoice) if invoice else httpx.Response(404)
+        return httpx.Response(404)
+
+    def set_status(self, invoice_id: str, status: str, paid_amount: str = "0.00") -> None:
+        self.invoices[invoice_id].update(status=status, paid_amount=paid_amount)
+
+
 @pytest.fixture
-async def app(db, settings):
+def fake_provider() -> FakeProvider:
+    return FakeProvider()
+
+
+@pytest.fixture
+def provider_client(settings, fake_provider):
+    return build_provider_client(
+        settings, transport=httpx.MockTransport(fake_provider), retry_backoff_seconds=0
+    )
+
+
+@pytest.fixture
+async def app(db, settings, provider_client):
     app = create_app(settings)
     async with app.router.lifespan_context(app):
+        await app.state.provider.aclose()
+        app.state.provider = provider_client
         yield app
 
 
@@ -118,23 +173,3 @@ def make_account(db):
         return AccountCreds(id=account_id, api_key=info["api_key"])
 
     return _make
-
-
-async def get_balance(db: Database, account_id: uuid.UUID) -> Decimal:
-    async with db.transaction() as session:
-        account = await session.get_one(Account, account_id)
-    return account.balance_usd
-
-
-def signed_webhook(
-    event: dict, *, secret: str = WEBHOOK_SECRET, timestamp: int | None = None
-) -> tuple[bytes, dict[str, str]]:
-    body = json.dumps(event).encode()
-    ts = str(int(time.time()) if timestamp is None else timestamp)
-    mac = hmac.new(secret.encode(), ts.encode() + b"." + body, hashlib.sha256).hexdigest()
-    headers = {
-        "Content-Type": "application/json",
-        "X-Timestamp": ts,
-        "X-Signature": f"sha256={mac}",
-    }
-    return body, headers

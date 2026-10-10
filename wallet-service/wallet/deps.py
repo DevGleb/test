@@ -7,6 +7,7 @@ from wallet.config import Settings
 from wallet.db import Database
 from wallet.errors import unauthorized
 from wallet.models import Account
+from wallet.provider_client import ProviderClient
 from wallet.security import hash_api_key
 
 
@@ -16,6 +17,10 @@ def get_settings(request: Request) -> Settings:
 
 def get_db(request: Request) -> Database:
     return request.app.state.db
+
+
+def get_provider(request: Request) -> ProviderClient:
+    return request.app.state.provider
 
 
 async def current_account_id(

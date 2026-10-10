@@ -4,10 +4,11 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from wallet.api import accounts
+from wallet.api import accounts, deposits, webhooks
 from wallet.config import Settings
 from wallet.db import Database
 from wallet.errors import install_error_handlers
+from wallet.provider_client import ProviderClient
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -16,9 +17,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.db = Database(settings.database_url)
+        app.state.provider = build_provider_client(settings)
         try:
             yield
         finally:
+            await app.state.provider.aclose()
             await app.state.db.dispose()
 
     app = FastAPI(title="wallet-service", lifespan=lifespan)
@@ -30,7 +33,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {"status": "ok"}
 
     app.include_router(accounts.router)
+    app.include_router(deposits.router)
+    app.include_router(webhooks.router)
     return app
+
+
+def build_provider_client(settings: Settings, **kwargs) -> ProviderClient:
+    return ProviderClient(
+        base_url=settings.provider_base_url,
+        api_key=settings.provider_api_key,
+        timeout_seconds=settings.provider_timeout_seconds,
+        connect_timeout_seconds=settings.provider_connect_timeout_seconds,
+        max_attempts=settings.provider_max_attempts,
+        **kwargs,
+    )
 
 
 def app_factory() -> FastAPI:

@@ -67,6 +67,7 @@ class Deposit(Base):
         CheckConstraint("amount > 0", name="deposit_amount_positive"),
         Index("ix_deposits_status_created_at", "status", "created_at"),
     )
+    __mapper_args__ = {"eager_defaults": True}
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     account_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("accounts.id"), index=True)

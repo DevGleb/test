@@ -1,15 +1,7 @@
 from sqlalchemy import select
 
+from tests.helpers import assert_error
 from wallet.models import Account
-
-
-def assert_error(response, status_code: int, code: str) -> dict:
-    assert response.status_code == status_code, response.text
-    body = response.json()
-    assert set(body) == {"error"}
-    assert set(body["error"]) == {"code", "message", "details"}
-    assert body["error"]["code"] == code
-    return body["error"]
 
 
 async def test_me_requires_api_key(client):
