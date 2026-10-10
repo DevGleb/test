@@ -1,0 +1,58 @@
+x-shared-secrets: &shared-secrets
+  PROVIDER_API_KEY: ${PROVIDER_API_KEY:-dev-provider-api-key}
+  WEBHOOK_SECRET: ${WEBHOOK_SECRET:-dev-webhook-secret}
+
+x-healthcheck: &healthcheck
+  interval: 3s
+  timeout: 3s
+  retries: 30
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ledgerlite}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ledgerlite}
+      POSTGRES_DB: ${POSTGRES_DB:-ledgerlite}
+    ports:
+      - "${DB_HOST_PORT:-55432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+
+  provider-mock:
+    build: ./provider-mock
+    environment:
+      <<: *shared-secrets
+      PUBLIC_BASE_URL: http://localhost:${PROVIDER_HOST_PORT:-8001}
+    ports:
+      - "${PROVIDER_HOST_PORT:-8001}:8001"
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+
+  wallet:
+    build: ./wallet-service
+    depends_on:
+      db:
+        condition: service_healthy
+      provider-mock:
+        condition: service_healthy
+    environment:
+      <<: *shared-secrets
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-ledgerlite}:${POSTGRES_PASSWORD:-ledgerlite}@db:5432/${POSTGRES_DB:-ledgerlite}
+      PROVIDER_BASE_URL: http://provider-mock:8001
+      WEBHOOK_CALLBACK_URL: http://wallet:8000/v1/webhooks/provider
+      PROVIDER_TIMEOUT_SECONDS: ${PROVIDER_TIMEOUT_SECONDS:-5}
+      WEBHOOK_TOLERANCE_SECONDS: ${WEBHOOK_TOLERANCE_SECONDS:-300}
+      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-30}
+    ports:
+      - "${WALLET_HOST_PORT:-8000}:8000"
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+
+volumes:
+  pgdata:
