@@ -1,5 +1,3 @@
-import json
-
 from fastapi import APIRouter, Depends, Request
 from pydantic import ValidationError
 
@@ -39,6 +37,6 @@ async def provider_webhook(
         invoice_id=event.invoice_id,
         status=event.status,
         paid_amount=event.paid_amount,
-        payload=json.loads(raw),
+        payload=event.model_dump(mode="json"),
     )
     return {"status": outcome}

@@ -131,3 +131,20 @@ async def test_deposit_without_invoice_is_failed_only_when_clearly_abandoned(
     assert report.failed_without_invoice == 1
     assert await status_of(db, stuck.id) == "failed"
     assert await status_of(db, recent.id) == "pending"
+
+
+async def test_every_stale_deposit_is_visited_despite_older_abandoned_ones(
+    client, db, make_account, fake_provider, provider_client
+):
+    alice = await make_account()
+    abandoned = [await make_pending(client, alice) for _ in range(3)]
+    paid = [await make_pending(client, alice) for _ in range(2)]
+    for minutes, deposit in zip([50, 40, 30, 20, 15], abandoned + paid, strict=True):
+        await age(db, deposit["deposit_id"], minutes)
+    for deposit in paid:
+        fake_provider.set_status(deposit["invoice_id"], "paid", "1.00")
+
+    report = await reconcile_pending_deposits(db, provider_client, older_than=N, batch_size=2)
+
+    assert (report.checked, report.still_pending, report.settled) == (5, 3, 2)
+    assert await get_balance(db, alice.id) == Decimal("1.96")

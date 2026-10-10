@@ -83,3 +83,11 @@ async def test_invalid_cursor_is_422(client, make_account):
 
 async def test_history_requires_auth(client):
     assert_error(await client.get(URL), 401, "unauthorized")
+
+
+async def test_cursor_beyond_bigint_is_422(client, make_account):
+    alice = await make_account()
+    response = await client.get(
+        URL, params={"cursor": "99999999999999999999"}, headers=alice.headers
+    )
+    assert_error(response, 422, "invalid_cursor")

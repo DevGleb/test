@@ -11,7 +11,18 @@ import uuid
 
 WALLET = os.environ.get("WALLET_URL", "http://localhost:8000")
 PROVIDER = os.environ.get("PROVIDER_URL", "http://localhost:8001")
-PROVIDER_API_KEY = os.environ.get("PROVIDER_API_KEY", "dev-provider-api-key")
+
+
+def _provider_api_key() -> str:
+    """Return the API key the running provider-mock uses."""
+    if "PROVIDER_API_KEY" in os.environ:
+        return os.environ["PROVIDER_API_KEY"]
+    return subprocess.run(
+        ["docker", "compose", "exec", "-T", "provider-mock", "printenv", "PROVIDER_API_KEY"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
 
 
 def call(method: str, url: str, body: dict | None = None, headers: dict | None = None):
@@ -63,7 +74,7 @@ def main() -> None:
     alice = create_account("smoke-alice")
     bob = create_account("smoke-bob")
     alice_h = {"X-API-Key": alice["api_key"]}
-    provider_h = {"Authorization": f"Bearer {PROVIDER_API_KEY}"}
+    provider_h = {"Authorization": f"Bearer {_provider_api_key()}"}
 
     status, deposit, _ = call("POST", f"{WALLET}/v1/deposits", {"amount": "10.00"}, alice_h)
     expect("create deposit", status, 201)

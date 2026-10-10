@@ -130,7 +130,9 @@ def create_app(
 
     def require_api_key(authorization: str | None = Header(default=None)) -> None:
         expected = f"Bearer {settings.provider_api_key}"
-        if authorization is None or not hmac.compare_digest(authorization, expected):
+        if authorization is None or not hmac.compare_digest(
+            authorization.encode(), expected.encode()
+        ):
             raise ApiError(401, "unauthorized", "Missing or invalid bearer token")
 
     def get_invoice(invoice_id: str) -> Invoice:

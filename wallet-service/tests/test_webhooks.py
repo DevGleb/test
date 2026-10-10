@@ -240,3 +240,31 @@ async def test_raw_body_is_verified_not_reserialized(client, db, make_account):
     )
     assert response.status_code == 200
     assert await get_balance(db, alice.id) == Decimal("9.85")
+
+
+async def test_unknown_extra_fields_are_accepted_but_not_stored(client, db, make_account):
+    alice = await make_account()
+    deposit = await pending_deposit(client, alice)
+    event = make_event(deposit["invoice_id"], extra_nan=float("nan"), extra_nul="a\u0000b")
+
+    response = await send(client, event)
+
+    assert response.json() == {"status": "processed"}
+    assert await get_balance(db, alice.id) == Decimal("9.85")
+
+
+async def test_nul_in_event_id_is_422(client, make_account):
+    alice = await make_account()
+    deposit = await pending_deposit(client, alice)
+    response = await send(client, {**make_event(deposit["invoice_id"]), "event_id": "evt\u0000"})
+    assert_error(response, 422, "validation_error")
+
+
+@pytest.mark.parametrize("timestamp", ["1" + "0" * 400, "9" * 5000])
+async def test_absurd_timestamp_is_401_not_500(client, timestamp):
+    response = await client.post(
+        WEBHOOK_URL,
+        content=b"{}",
+        headers={"X-Timestamp": timestamp, "X-Signature": sign(b"{}", timestamp)},
+    )
+    assert_error(response, 401, "invalid_signature")

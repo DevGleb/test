@@ -68,8 +68,8 @@ class DepositOut(BaseModel):
 
 
 class WebhookEventIn(BaseModel):
-    event_id: str = Field(min_length=1, max_length=128)
-    invoice_id: str = Field(min_length=1, max_length=64)
+    event_id: str = Field(min_length=1, max_length=128, pattern=r"^[\x21-\x7e]+$")
+    invoice_id: str = Field(min_length=1, max_length=64, pattern=r"^[\x21-\x7e]+$")
     status: Literal["paid", "partially_paid", "expired"]
     paid_amount: MoneyStr
     occurred_at: datetime

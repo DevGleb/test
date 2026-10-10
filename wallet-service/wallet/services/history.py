@@ -6,11 +6,13 @@ from wallet.db import Database
 from wallet.errors import AppError
 from wallet.models import LedgerEntry
 
+MAX_BIGINT = 2**63 - 1
+
 
 def parse_cursor(cursor: str | None) -> int | None:
     if cursor is None:
         return None
-    if not cursor.isascii() or not cursor.isdigit():
+    if not cursor.isascii() or not cursor.isdigit() or int(cursor) > MAX_BIGINT:
         raise AppError(422, "invalid_cursor", "cursor must be a value returned as next_cursor")
     return int(cursor)
 

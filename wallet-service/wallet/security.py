@@ -33,7 +33,7 @@ def verify_webhook_signature(
     """Raise a 401 unless the HMAC over the raw body is valid and the timestamp is fresh."""
     if not timestamp or not signature:
         raise AppError(401, "invalid_signature", "Missing X-Timestamp or X-Signature header")
-    if not timestamp.isascii() or not timestamp.isdigit():
+    if len(timestamp) > 12 or not timestamp.isascii() or not timestamp.isdigit():
         raise AppError(401, "invalid_signature", "X-Timestamp must be a unix timestamp in seconds")
 
     now = time.time() if now is None else now

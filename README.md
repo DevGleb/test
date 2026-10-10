@@ -185,7 +185,10 @@ Code layout: `wallet/api/*` contains thin routers. The logic is in `wallet/servi
 - **Idempotency on purchases:** `Idempotency-Key` is optional there and honoured when
   sent.
 - **Extra fields** in request bodies are rejected (422). Webhook payloads may carry extra
-  fields.
+  fields; only the validated ones are stored in `webhook_events`.
+- **Order of checks:** FastAPI parses the JSON body before it runs dependencies, so a
+  request with a broken body and no API key gets 400 `malformed_json`, not 401. Fixing
+  this would mean moving auth into middleware; I left it.
 - **History** is newest first, with keyset pagination: pass `next_cursor` back as
   `?cursor=`. Deposits appear when credited; pending ones can be read via
   `GET /v1/deposits/{id}`.

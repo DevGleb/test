@@ -202,3 +202,10 @@ async def test_unknown_invoice_is_404(client):
     response = await client.get("/invoices/inv_missing", headers=AUTH)
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "invoice_not_found"
+
+
+async def test_non_ascii_bearer_is_401_not_500(client):
+    raw = "Bearer \u00e9".encode("latin-1")
+    response = await client.get("/invoices/x", headers={"Authorization": raw})
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "unauthorized"

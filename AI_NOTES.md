@@ -69,6 +69,20 @@ TODO (author): list your own calls here. Examples of decisions that were open:
      replay itself worked.
    - **Fix:** use the case-insensitive `HTTPMessage`.
 
+6. **Crash paths the AI-written code and tests both missed.**
+   - **What was wrong:** the code passed all its own tests, but an independent review
+     agent found inputs that ended in a 500 instead of a clean 4xx:
+     - a correctly signed webhook with an extra `NaN` or `"\u0000"` field (stored into
+       JSONB, which rejects both);
+     - a 400-digit `X-Timestamp` (`OverflowError`, and no signature needed);
+     - a history cursor above BIGINT;
+     - a non-ASCII bearer token in provider-mock (`hmac.compare_digest` on `str`).
+   - **Same review, other issues:** reconciliation always re-read the same 500 oldest
+     deposits, so it could starve. The Postgres healthcheck used the unix socket, which
+     the image's init server answers before TCP is up.
+   - **Fix:** each was fixed with a regression test; the healthcheck now uses
+     `-h 127.0.0.1`.
+
 Smaller ones:
 - `assert` used for a state check in production code (stripped under `python -O`);
   replaced with an explicit exception.
