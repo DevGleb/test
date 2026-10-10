@@ -1,3 +1,4 @@
+import httpx
 from sqlalchemy import select
 
 from tests.helpers import assert_error
@@ -38,3 +39,17 @@ async def test_unknown_route_uses_error_format(client):
 
 async def test_wrong_method_uses_error_format(client):
     assert_error(await client.delete("/v1/accounts/me"), 405, "method_not_allowed")
+
+
+async def test_unhandled_error_uses_error_format(app):
+    async def boom():
+        raise RuntimeError("secret internals")
+
+    app.add_api_route("/boom", boom)
+    transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+    async with httpx.AsyncClient(transport=transport, base_url="http://wallet.test") as c:
+        response = await c.get("/boom")
+
+    error = assert_error(response, 500, "internal_error")
+    assert "secret internals" not in response.text
+    assert error["details"] == {}
