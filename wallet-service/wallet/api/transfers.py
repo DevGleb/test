@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from wallet.db import Database
-from wallet.deps import current_account_id, get_db
+from wallet.deps import get_db, rate_limited_account_id
 from wallet.money import format_money
 from wallet.schemas import TransferCreate, TransferOut
 from wallet.services.idempotency import (
@@ -22,7 +22,7 @@ router = APIRouter(prefix="/v1/transfers", tags=["transfers"])
 @router.post("", status_code=201, response_model=TransferOut)
 async def create_transfer(
     body: TransferCreate,
-    account_id: uuid.UUID = Depends(current_account_id),
+    account_id: uuid.UUID = Depends(rate_limited_account_id),
     idempotency_key: str = Depends(required_idempotency_key),
     db: Database = Depends(get_db),
 ) -> JSONResponse:

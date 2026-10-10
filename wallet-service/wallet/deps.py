@@ -9,6 +9,7 @@ from wallet.errors import unauthorized
 from wallet.models import Account
 from wallet.provider_client import ProviderClient
 from wallet.security import hash_api_key
+from wallet.services.rate_limit import check_rate_limit
 
 
 def get_settings(request: Request) -> Settings:
@@ -35,4 +36,14 @@ async def current_account_id(
         )
     if account_id is None:
         raise unauthorized()
+    return account_id
+
+
+async def rate_limited_account_id(
+    account_id: uuid.UUID = Depends(current_account_id),
+    db: Database = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> uuid.UUID:
+    """Authenticate the caller and apply the per-key POST rate limit."""
+    await check_rate_limit(db, account_id, settings.rate_limit_per_minute)
     return account_id

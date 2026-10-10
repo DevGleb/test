@@ -150,3 +150,14 @@ class IdempotencyKey(Base):
     response_status: Mapped[int | None] = mapped_column(Integer)
     response_body: Mapped[dict[str, Any] | None]
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class RateLimitHit(Base):
+    """One row per accepted rate-limited request within the last minute."""
+
+    __tablename__ = "rate_limit_hits"
+    __table_args__ = (Index("ix_rate_limit_hits_account_id_hit_at", "account_id", "hit_at"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    account_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("accounts.id"))
+    hit_at: Mapped[datetime] = mapped_column(server_default=func.now())
