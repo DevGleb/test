@@ -7,7 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from wallet.models import Account, Deposit
+from wallet.models import Account, Deposit, Transfer
 from wallet.money import AmountStr, MoneyStr, format_money
 
 
@@ -73,3 +73,26 @@ class WebhookEventIn(BaseModel):
     status: Literal["paid", "partially_paid", "expired"]
     paid_amount: MoneyStr
     occurred_at: datetime
+
+
+class TransferCreate(RequestModel):
+    to_account_id: uuid.UUID
+    amount: AmountStr
+
+
+class TransferOut(BaseModel):
+    transfer_id: uuid.UUID
+    from_account_id: uuid.UUID
+    to_account_id: uuid.UUID
+    amount: str
+    created_at: datetime
+
+    @classmethod
+    def of(cls, transfer: Transfer) -> "TransferOut":
+        return cls(
+            transfer_id=transfer.id,
+            from_account_id=transfer.from_account_id,
+            to_account_id=transfer.to_account_id,
+            amount=format_money(transfer.amount),
+            created_at=transfer.created_at,
+        )
