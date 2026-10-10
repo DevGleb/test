@@ -5,10 +5,10 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictInt
 
-from wallet.models import Account, Deposit, Transfer
-from wallet.money import AmountStr, MoneyStr, format_money
+from wallet.models import Account, Deposit, LedgerEntry, Purchase, Transfer
+from wallet.money import MAX_CREDITS_PER_PURCHASE, AmountStr, MoneyStr, format_money
 
 
 def _money_or_none(value: Decimal | None) -> str | None:
@@ -96,3 +96,58 @@ class TransferOut(BaseModel):
             amount=format_money(transfer.amount),
             created_at=transfer.created_at,
         )
+
+
+class PurchaseCreate(RequestModel):
+    credits: StrictInt = Field(gt=0, le=MAX_CREDITS_PER_PURCHASE)
+
+
+class PurchaseOut(BaseModel):
+    purchase_id: uuid.UUID
+    credits: int
+    price_usd: str
+    balance_usd: str
+    credits_balance: int
+    created_at: datetime
+
+    @classmethod
+    def of(cls, purchase: Purchase, account: Account) -> "PurchaseOut":
+        return cls(
+            purchase_id=purchase.id,
+            credits=purchase.credits,
+            price_usd=format_money(purchase.price),
+            balance_usd=format_money(account.balance_usd),
+            credits_balance=account.credits,
+            created_at=purchase.created_at,
+        )
+
+
+class TransactionOut(BaseModel):
+    id: str
+    type: str
+    amount_usd: str
+    credits_delta: int
+    balance_usd_after: str
+    credits_after: int
+    reference_id: uuid.UUID
+    counterparty_account_id: uuid.UUID | None
+    created_at: datetime
+
+    @classmethod
+    def of(cls, entry: LedgerEntry) -> "TransactionOut":
+        return cls(
+            id=str(entry.id),
+            type=entry.kind,
+            amount_usd=format_money(entry.amount_usd),
+            credits_delta=entry.credits_delta,
+            balance_usd_after=format_money(entry.balance_usd_after),
+            credits_after=entry.credits_after,
+            reference_id=entry.reference_id,
+            counterparty_account_id=entry.counterparty_account_id,
+            created_at=entry.created_at,
+        )
+
+
+class TransactionPage(BaseModel):
+    items: list[TransactionOut]
+    next_cursor: str | None

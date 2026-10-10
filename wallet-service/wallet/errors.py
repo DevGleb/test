@@ -1,12 +1,15 @@
 """Unified {"error": {"code", "message", "details"}} responses for every endpoint."""
 
 import logging
+from decimal import Decimal
 from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
+
+from wallet.money import format_money
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +54,15 @@ def validation_error(errors: list[dict[str, Any]]) -> AppError:
     if any(e["type"] == "json_invalid" for e in clean):
         return AppError(400, "malformed_json", "Request body is not valid JSON", {"errors": clean})
     return AppError(422, "validation_error", "Request validation failed", {"errors": clean})
+
+
+def insufficient_funds(balance: Decimal, required: Decimal) -> AppError:
+    return AppError(
+        409,
+        "insufficient_funds",
+        "Insufficient funds",
+        {"balance_usd": format_money(balance), "required_usd": format_money(required)},
+    )
 
 
 _HTTP_CODES = {

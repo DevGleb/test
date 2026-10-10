@@ -108,6 +108,22 @@ def main() -> None:
     )
     expect("insufficient funds", (s4, err["error"]["code"]), (409, "insufficient_funds"))
 
+    s5, err, _ = call("POST", f"{WALLET}/v1/purchases", {"credits": 507}, alice_h)
+    expect(
+        "purchase 507 credits with 7.85", (s5, err["error"]["code"]), (409, "insufficient_funds")
+    )
+    s6, purchase, _ = call("POST", f"{WALLET}/v1/purchases", {"credits": 50}, alice_h)
+    expect("purchase 50 credits", (s6, purchase["price_usd"]), (201, "5.00"))
+    _, me, _ = call("GET", f"{WALLET}/v1/accounts/me", headers=alice_h)
+    expect("balances after purchase", (me["balance_usd"], me["credits"]), ("2.85", 50))
+
+    _, page, _ = call("GET", f"{WALLET}/v1/transactions?limit=2", headers=alice_h)
+    expect("history page", [i["type"] for i in page["items"]], ["purchase", "transfer_out"])
+    _, rest, _ = call(
+        "GET", f"{WALLET}/v1/transactions?limit=2&cursor={page['next_cursor']}", headers=alice_h
+    )
+    expect("history next page", [i["type"] for i in rest["items"]], ["deposit"])
+
     print("smoke test passed")
 
 

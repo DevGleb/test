@@ -3,19 +3,9 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from wallet.errors import AppError
+from wallet.errors import AppError, insufficient_funds
 from wallet.models import LedgerEntry, LedgerKind, Transfer
-from wallet.money import format_money
 from wallet.services.accounts import lock_accounts
-
-
-def insufficient_funds(balance: Decimal, required: Decimal) -> AppError:
-    return AppError(
-        409,
-        "insufficient_funds",
-        "Insufficient funds",
-        {"balance_usd": format_money(balance), "required_usd": format_money(required)},
-    )
 
 
 async def execute_transfer(
