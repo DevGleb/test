@@ -124,6 +124,29 @@ def main() -> None:
     )
     expect("history next page", [i["type"] for i in rest["items"]], ["deposit"])
 
+    out = subprocess.run(
+        [
+            "docker",
+            "compose",
+            "exec",
+            "-T",
+            "wallet",
+            "python",
+            "-m",
+            "wallet.cli",
+            "reconcile",
+            "--older-than-minutes",
+            "0",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    print(f"       reconcile report: {out.strip()}")
+    _, lost_now, _ = call("GET", f"{WALLET}/v1/deposits/{lost['deposit_id']}", headers=alice_h)
+    expect("lost deposit after reconcile", lost_now["status"], "paid")
+    expect("alice after reconcile", balance(alice), "7.77")
+
     print("smoke test passed")
 
 

@@ -38,7 +38,7 @@ async def create_deposit(
             amount=amount, external_id=str(deposit_id), callback_url=callback_url
         )
     except ProviderError as exc:
-        await _mark_failed(db, deposit_id, str(exc))
+        await mark_failed(db, deposit_id, str(exc))
         details = {"deposit_id": str(deposit_id)}
         if isinstance(exc, ProviderUnavailable):
             raise AppError(
@@ -55,7 +55,7 @@ async def create_deposit(
     return deposit
 
 
-async def _mark_failed(db: Database, deposit_id: uuid.UUID, reason: str) -> None:
+async def mark_failed(db: Database, deposit_id: uuid.UUID, reason: str) -> None:
     async with db.transaction() as session:
         await session.execute(
             update(Deposit)
